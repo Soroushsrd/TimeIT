@@ -1,4 +1,5 @@
 mod file_watcher;
+mod input_watcher;
 use file_watcher::{FileWatcher, detect_language};
 use notify::{Event, RecursiveMode, Result, Watcher};
 use std::path::Path;
