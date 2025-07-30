@@ -1,7 +1,8 @@
+use crossbeam::channel::Receiver;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{Arc, mpsc::Receiver},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -131,7 +132,7 @@ impl FileWatcher {
         }
         true
     }
-    pub async fn handle_file_watcher(&mut self, rx: &Arc<Receiver<crate::Result<Event>>>) {
+    pub async fn handle_file_watcher(&mut self, rx: Arc<Receiver<crate::Result<Event>>>) {
         for res in rx.as_ref() {
             match res {
                 Ok(event) => {
