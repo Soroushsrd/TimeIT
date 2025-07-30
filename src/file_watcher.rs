@@ -1,11 +1,17 @@
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    sync::{Arc, mpsc::Receiver},
     time::{Duration, Instant},
 };
 
 use notify::Event;
 
+/// file watcher is used to keep track of file events
+/// it will keep a map of last events and the time they happened
+/// it will also keep track of the file extension in which the
+/// modifications occur and will ignore the files for which ignore
+/// patterns apply
 pub struct FileWatcher {
     //TODO: use atomics? with rwlock?
     last_events: HashMap<PathBuf, Instant>,
@@ -15,6 +21,7 @@ pub struct FileWatcher {
 }
 
 impl FileWatcher {
+    /// creates a new file watcher. doesnt take anything as input for now
     pub fn new() -> Self {
         let source_extensions = HashSet::from([
             ".rs", ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".cpp", ".h", ".c", ".lua",
@@ -71,22 +78,19 @@ impl FileWatcher {
                 notify::event::DataChange::Any,
             )) => {
                 // will check for keyboard movement later
+                for path in &event.paths {
+                    if self.should_ignore(path) {
+                        continue;
+                    } else if self.should_debounce(path) {
+                        continue;
+                    } else {
+                        return Some(path.clone());
+                    }
+                }
+                None
             }
-            _ => return None,
+            _ => None,
         }
-
-        for path in &event.paths {
-            if self.should_ignore(path) {
-                continue;
-            }
-
-            if self.should_debounce(path) {
-                continue;
-            }
-
-            return Some(path.clone());
-        }
-        None
     }
 
     /// checks and sees if the diff in time between the new event
@@ -126,6 +130,23 @@ impl FileWatcher {
             }
         }
         true
+    }
+    pub async fn handle_file_watcher(&mut self, rx: &Arc<Receiver<crate::Result<Event>>>) {
+        for res in rx.as_ref() {
+            match res {
+                Ok(event) => {
+                    if let Some(path) = self.process_event(&event) {
+                        let language = detect_language(&path).unwrap_or("unknown");
+                        let relative_path = path.strip_prefix("./").unwrap_or(&path);
+
+                        println!("file modified: {} ({language})", relative_path.display());
+                    }
+                }
+                Err(e) => {
+                    println!("file watcher error: {e}");
+                }
+            }
+        }
     }
 }
 
