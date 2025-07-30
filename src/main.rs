@@ -1,33 +1,45 @@
 mod file_watcher;
 mod input_watcher;
-use file_watcher::{FileWatcher, detect_language};
+use crate::input_watcher::InputMonitor;
+use file_watcher::FileWatcher;
 use notify::{Event, RecursiveMode, Result, Watcher};
 use std::path::Path;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
+use tokio;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() {
+    //TODO: use a macro for logging and a thread local buffer
+
     println!("Starting filtered file watcher...");
     println!("Watching current directory for source code changes");
     println!("Press Ctrl+C to stop\n");
+
+    let (input_monitor, receiver) = InputMonitor::new();
+    let input_monitor = Arc::new(input_monitor);
+    // tokio::spawn(input_monitor.clone().start_activity_monitoring());
+    tokio::spawn(input_monitor.clone().start_idle_monitoring(20));
+    tokio::spawn(input_monitor.receive_events(receiver));
+
     let (tx, rx) = mpsc::channel::<Result<Event>>();
-    let mut watcher = notify::recommended_watcher(tx)?;
+    let rx = Arc::new(rx);
+    let mut watcher = notify::recommended_watcher(tx.clone()).unwrap();
     let mut file_watcher = FileWatcher::new();
-    watcher.watch(Path::new("."), RecursiveMode::Recursive)?;
+    // //TODO: for now it just listens to the local directory
+    // //we should add global monitoring
 
-    for res in rx {
-        match res {
-            Ok(event) => {
-                if let Some(path) = file_watcher.process_event(&event) {
-                    let language = detect_language(&path).unwrap_or("unknown");
-                    let relative_path = path.strip_prefix("./").unwrap_or(&path);
+    watcher
+        .watch(Path::new("."), RecursiveMode::Recursive)
+        .expect("failed to watch using watcher!");
 
-                    println!("file modified: {} ({language})", relative_path.display());
-                }
-            }
-            Err(e) => {
-                println!("file watcher error: {e}");
-            }
-        }
-    }
-    Ok(())
+    file_watcher.handle_file_watcher(&rx).await;
+    //
+    // loop {
+    //     tokio::select! {
+    //        _ = file_watcher.handle_file_watcher(&rx)=>{}
+    //        _ = input_monitor.clone().start_idle_monitoring(20)=>{}
+    //        _ = input_monitor.clone().receive_events(input_monitor.event_sender.subscribe())=>{}
+    //        _ = input_monitor.clone().start_activity_monitoring()=>{}
+    //     }
+    // }
 }
