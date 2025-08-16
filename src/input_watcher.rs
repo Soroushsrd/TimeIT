@@ -168,21 +168,22 @@ impl InputMonitor {
         };
 
         if let Err(e) = listen(callback) {
-            println!("error: {:?}", e);
+            println!("error: {e:?}");
         }
     }
 
+    /// will listen for events as they happen. these events are received through receiver channel
     pub async fn receive_events(self: Arc<Self>, mut receiver: Receiver<ActivityEvent>) {
         while let Ok(event) = receiver.recv().await {
             match event {
                 ActivityEvent::KeyboardActivity { time_stamp } => {
-                    println!("Keyboard activity at {:?}", time_stamp);
+                    println!("Keyboard activity at {time_stamp:?}");
                 }
                 ActivityEvent::MouseActivity { time_stamp } => {
-                    println!("Mouse activity at {:?}", time_stamp);
+                    println!("Mouse activity at {time_stamp:?}");
                 }
                 ActivityEvent::IdleDetected { duration } => {
-                    println!("User idle for {:?}", duration);
+                    println!("User idle for {duration:?}");
                 }
                 ActivityEvent::ActivityResumed => {
                     println!("User activity resumed");

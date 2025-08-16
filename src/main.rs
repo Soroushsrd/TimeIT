@@ -1,23 +1,17 @@
+mod file_session;
 mod file_watcher;
 mod input_watcher;
+mod manager;
+mod stats;
+mod tracking_event;
+
 use crate::input_watcher::InputMonitor;
-use crossbeam::channel::unbounded;
 use file_watcher::FileWatcher;
 use notify::{Event, RecursiveMode, Result, Watcher};
 use std::path::Path;
-use std::sync::{Arc, mpsc};
-use tokio;
+use std::sync::Arc;
 
-//WARNING: what needs to be done:
-//      idle monitoring in one thread
-//      event receiving in another thread
-//      listening and file watcher in the main thread
-
-//WARNING: it seems that crossbeam channels can be used for file watcher. use that
-//      instead of tokio. should be able to send them accross threads
-//
 //WARNING:use a macro for logging and a thread local buffer
-
 //################################################################
 
 #[tokio::main]
@@ -25,9 +19,13 @@ async fn main() {
     println!("Starting filtered file watcher...");
     println!("Watching current directory for source code changes");
 
+    // we create an input monitor and its receiver channel
     let (input_monitor, receiver) = InputMonitor::new();
+    // wrap an arc around it so that we could pass it around in threads
     let input_monitor = Arc::new(input_monitor);
 
+    // one taks to monitor idle activity
+    // one task to receive events
     tokio::spawn(input_monitor.clone().start_idle_monitoring(20));
     tokio::spawn(input_monitor.clone().receive_events(receiver));
 
@@ -54,13 +52,4 @@ async fn main() {
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
-    //
-    // loop {
-    //     tokio::select! {
-    //        _ = file_watcher.handle_file_watcher(&rx)=>{}
-    //        _ = input_monitor.clone().start_idle_monitoring(20)=>{}
-    //        _ = input_monitor.clone().receive_events(input_monitor.event_sender.subscribe())=>{}
-    //        _ = input_monitor.clone().start_activity_monitoring()=>{}
-    //     }
-    // }
 }

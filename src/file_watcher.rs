@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use notify::Event;
+use notify::{Event, event::AccessMode};
 
 /// file watcher is used to keep track of file events
 /// it will keep a map of last events and the time they happened
@@ -80,15 +80,23 @@ impl FileWatcher {
             )) => {
                 // will check for keyboard movement later
                 for path in &event.paths {
-                    if self.should_ignore(path) {
-                        continue;
-                    } else if self.should_debounce(path) {
+                    if self.should_ignore(path) || self.should_debounce(path) {
                         continue;
                     } else {
                         return Some(path.clone());
                     }
                 }
                 None
+            }
+            notify::EventKind::Access(notify::event::AccessKind::Open(AccessMode::Any)) => {
+                todo!(
+                    "should start the time for that file, inside this time, each input activity should be recorded"
+                );
+            }
+            notify::EventKind::Access(notify::event::AccessKind::Close(AccessMode::Any)) => {
+                todo!(
+                    "should stop the time for this file and return the amount of time that this file has been active"
+                );
             }
             _ => None,
         }
@@ -124,7 +132,7 @@ impl FileWatcher {
         // checking file extensions
         if let Some(extension) = path.extension() {
             if let Some(ext_str) = extension.to_str() {
-                let ext_with_dot = format!(".{}", ext_str);
+                let ext_with_dot = format!(".{ext_str}");
                 if self.source_extensions.contains(ext_with_dot.as_str()) {
                     return false;
                 }
